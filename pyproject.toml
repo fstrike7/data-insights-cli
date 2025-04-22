@@ -1,0 +1,27 @@
+[project]
+name = "data-insights"
+version = "0.1.0"
+description = "CLI para subir, analizar y visualizar datasets vía una API REST en Django"
+readme = "README.md"
+authors = [
+    { name="Faustino Beatrice"}
+]
+requires-python = ">=3.7"
+dependencies = [
+    "requests",
+    "pandas",
+]
+
+[project.scripts]
+data-insights = "data_insights_cli.cli.main:main"
+
+[tool.setuptools]
+packages = ["data_insights_cli"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
