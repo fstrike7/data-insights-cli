@@ -75,6 +75,7 @@ data-insights visualize --id 1 --type histogram --column edad
 data-insights predict --id 1 --feature año --target ventas --future 2026 --future 2027 --degree 2
 ```
 - El parámetro `--degree` es opcional y permite especificar el grado del polinomio para la regresión. Por defecto es 2, pero puede ajustarse para mejorar el ajuste del modelo según los datos.
+
 Los archivos se guardarán en la carpeta `outputs/` automáticamente.
 
 
