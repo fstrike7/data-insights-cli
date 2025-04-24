@@ -15,7 +15,7 @@
   - Histogramas
   - Gráficos de dispersión
   - Mapa de calor de correlación
-- Predicciones simples mediante regresión lineal desde el backend (`data-insights predict`)
+- Predicciones de valores futuros mediante regresión polinómica configurable desde el backend (`data-insights predict`)
 - Exportación como imágenes (`.png`)
 - Interfaz por consola instalada como comando: `data-insights`
 - Backend en Django + Django REST Framework para gestión de archivos, análisis y predicción.
@@ -71,9 +71,10 @@ data-insights analyze --id 1
 # Generar visualización y exportarla como imagen
 data-insights visualize --id 1 --type histogram --column edad
 
-# Predecir valores futuros con regresión lineal (desde el backend)
-data-insights predict --id 1 --feature año --target ventas --future 2026 --future 2027
+# Predecir valores futuros con regresión polinómica (desde el backend)
+data-insights predict --id 1 --feature año --target ventas --future 2026 --future 2027 --degree 2
 ```
+- El parámetro `--degree` es opcional y permite especificar el grado del polinomio para la regresión. Por defecto es 2, pero puede ajustarse para mejorar el ajuste del modelo según los datos.
 Los archivos se guardarán en la carpeta `outputs/` automáticamente.
 
 
@@ -105,7 +106,6 @@ data-insights-cli/
 │   │   ├── visualizer.py
 │   ├── cli/
 │   │   └── main.py
-│   ├── __init__.py
 │
 ├── ├──data_insights/      # Backend Django
 │   │   ├── api/

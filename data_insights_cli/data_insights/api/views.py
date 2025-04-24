@@ -59,13 +59,18 @@ class PredictView(APIView):
         df = pd.read_csv(file_path)
         feature = request.query_params.get("feature")
         target = request.query_params.get("target")
-        future_vals = request.query_params.getlist("future", type=float)
+        future_vals_raw = request.query_params.getlist("future")
+        degree = request.query_params.get("degree")
+        try:
+            future_vals = [float(val) for val in future_vals_raw]
+        except ValueError:
+            return Response({"error": "Todos los valores de 'future' deben ser numéricos."}, status=status.HTTP_400_BAD_REQUEST)
 
         if not feature or not target or not future_vals:
             return Response({"error": "Parámetros 'feature', 'target' y 'future' son obligatorios."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            resultado = predict_values(df, feature, target, future_vals)
+            resultado = predict_values(df, target, feature, future_vals, int(degree))
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

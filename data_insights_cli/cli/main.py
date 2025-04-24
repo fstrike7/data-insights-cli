@@ -4,12 +4,11 @@ import requests
 import os
 from io import BytesIO
 
-from data_insights_cli.analyzer.visualizer import plot_histogram, plot_scatter, plot_correlation
-from data_insights_cli.analyzer.predictor import predecir_valores
+from data_insights_cli.analyzer.visualizer import plot_histogram, plot_scatter, plot_correlation, plot_with_stats, plot_prediction
 
 API_URL = "http://127.0.0.1:8000/api/datasets/"  # TODO: Cambiar en deploy
 
-def obtener_dataset_por_id(id=None, name=None):
+def get_dataset_by_id(id=None, name=None):
     """Descarga el dataset y lo convierte en un DataFrame."""
     if id:
         res = requests.get(f"{API_URL}{id}/")
@@ -83,13 +82,13 @@ def analyze(id):
 @cli.command()
 @click.option('--id', required=False, type=int, help="ID del dataset")
 @click.option('--name', required=False, help="Nombre del dataset (alternativa a ID)")
-@click.option('--type', required=True, type=click.Choice(['histogram', 'scatter', 'correlation']), help="Tipo de gráfico")
+@click.option('--type', required=True, type=click.Choice(['histogram', 'scatter', 'correlation', 'stats']), help="Tipo de gráfico")
 @click.option('--column', required=False, help="Columna para histograma")
 @click.option('--x', required=False, help="Columna X (scatter)")
 @click.option('--y', required=False, help="Columna Y (scatter)")
 def visualize(id, name, type, column, x, y):
     """Genera visualizaciones a partir del dataset"""
-    df = obtener_dataset_por_id(id, name)
+    df = get_dataset_by_id(id, name)
     if df is None:
         return
 
@@ -107,6 +106,12 @@ def visualize(id, name, type, column, x, y):
 
     elif type == "correlation":
         plot_correlation(df)
+    
+    elif type == "stats":
+        if not x or not y:
+            click.echo("[⚠️] Debes especificar --x y --y para tipo 'stats'")
+            return
+        plot_with_stats(df, x, y)
 
 @cli.command()
 @click.option('--id', type=int, help="ID del dataset")
@@ -137,12 +142,14 @@ def delete(id, name):
 @click.option('--feature', required=True, help="Columna independiente (feature)")
 @click.option('--target', required=True, help="Columna objetivo (target)")
 @click.option('--future', required=True, multiple=True, type=float, help="Valores futuros de la variable independiente")
-def predict(id, feature, target, future):
+@click.option('--degree', default=2, required=False, type=int, help="Grado del polínomio. Por defecto es 2.")
+@click.option('--plot', is_flag=True, help="Generar una visualización con los resultados")
+def predict(id, feature, target, future, plot, degree):
     """
     Predice valores futuros usando regresión lineal.
     """
     future_params = "&".join([f"future={val}" for val in future])
-    url = f"{API_URL}{id}/predict/?feature={feature}&target={target}&{future_params}"
+    url = f"{API_URL}{id}/predict/?feature={feature}&target={target}&{future_params}&degree={degree}"
 
     click.echo(f"[🔮] Solicitando predicción desde el backend...")
     res = requests.get(url)
@@ -154,6 +161,10 @@ def predict(id, feature, target, future):
 
     data = res.json()
     click.echo(f"\n🔮 Predicciones para target '{target}' según '{feature}':")
+    if plot:
+        df = get_dataset_by_id(id)
+        if df is not None:
+            plot_prediction(df, feature, target, data["predicciones"])
     for pred in data["predicciones"]:
         click.echo(f"   ➤ Si {feature} = {pred['x']} ➜ {target} ≈ {round(pred['y'], 2)}")
 if __name__ == '__main__':
