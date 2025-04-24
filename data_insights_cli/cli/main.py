@@ -1,164 +1,160 @@
-import argparse
-from io import BytesIO
+import click
 import pandas as pd
 import requests
 import os
-from data_insights_cli.analyzer.stats import analyze_csv
-from data_insights_cli.analyzer.visualizer import plot_histogram, plot_scatter, plot_correlation
+from io import BytesIO
 
+from data_insights_cli.analyzer.visualizer import plot_histogram, plot_scatter, plot_correlation
+from data_insights_cli.analyzer.predictor import predecir_valores
 
 API_URL = "http://127.0.0.1:8000/api/datasets/"  # TODO: Cambiar en deploy
 
-def upload_file(file_path, name=None):
-    if not os.path.isfile(file_path):
-        print(f"[❌] El archivo no existe: {file_path}")
-        return
+def obtener_dataset_por_id(id=None, name=None):
+    """Descarga el dataset y lo convierte en un DataFrame."""
+    if id:
+        res = requests.get(f"{API_URL}{id}/")
+    elif name:
+        res = requests.get(f"{API_URL}by_name/?name={name}")
+    else:
+        click.echo("[❌] Debes proporcionar --id o --name")
+        return None
 
-    with open(file_path, 'rb') as f:
+    if res.status_code != 200:
+        click.echo(f"[❌] Dataset no encontrado ({res.status_code})")
+        return None
+
+    file_url = res.json()["file"]
+    click.echo(f"[📥] Descargando CSV desde: {file_url}")
+    file_res = requests.get(file_url)
+    if file_res.status_code != 200:
+        click.echo("[❌] Error al descargar CSV")
+        return None
+
+    return pd.read_csv(BytesIO(file_res.content))
+
+@click.group()
+def cli():
+    """Data Insights CLI"""
+    pass
+
+@cli.command()
+@click.option('--file', required=True, type=click.Path(exists=True), help="Ruta al archivo CSV")
+@click.option('--name', help="Nombre del dataset (opcional)")
+def upload(file, name):
+    """Sube un archivo CSV al servidor"""
+    with open(file, 'rb') as f:
         files = {'file': f}
-        data = {'name': name or os.path.basename(file_path)}
-        print(f"[⏫] Subiendo archivo '{file_path}'...")
+        data = {'name': name or os.path.basename(file)}
+        click.echo(f"[⏫] Subiendo archivo '{file}'...")
         response = requests.post(API_URL, files=files, data=data)
 
     if response.status_code == 201:
         data = response.json()
-        print(f"[✅] Archivo subido exitosamente.")
-        print(f"   ➤ Nombre: {data['name']}")
-        print(f"   ➤ ID: {data['id']}")
-        print(f"   ➤ URL: {data['file']}")
+        click.echo(f"[✅] Archivo subido exitosamente.\n   ➤ Nombre: {data['name']}\n   ➤ ID: {data['id']}\n   ➤ URL: {data['file']}")
     else:
-        print(f"[❌] Error al subir archivo: {response.status_code}")
-        print(response.text)
+        click.echo(f"[❌] Error al subir archivo: {response.status_code}\n{response.text}")
 
+@cli.command()
+@click.option('--id', required=True, type=int, help="ID del dataset")
+def analyze(id):
+    """Obtiene el análisis exploratorio desde el backend"""
+    click.echo(f"[🔎] Solicitando análisis para el dataset con ID {id}...")
 
-def analyze_dataset(dataset_id):
-    print(f"[🔎] Buscando dataset con ID {dataset_id}...")
-    res = requests.get(f"{API_URL}{dataset_id}/")
-
+    res = requests.get(f"{API_URL}{id}/analyze/")
     if res.status_code != 200:
-        print(f"[❌] Dataset no encontrado ({res.status_code})")
+        click.echo(f"[❌] Error al obtener análisis ({res.status_code})")
+        click.echo(res.text)
         return
 
-    dataset = res.json()
-    file_url = dataset["file"]
-    print(f"[📥] Descargando archivo desde: {file_url}")
-    file_response = requests.get(file_url)
+    analysis = res.json()
 
-    if file_response.status_code != 200:
-        print(f"[❌] Error al descargar archivo")
+    click.echo(f"\n🔢 Dimensiones: {analysis['shape']}")
+    click.echo(f"📄 Columnas: {analysis['columns']}")
+    click.echo(f"🔤 Tipos de datos: {analysis['dtypes']}")
+    click.echo(f"⚠️ Valores nulos: {analysis['nulls']}")
+
+    click.echo("\n📈 Estadísticas:")
+    for columna, estadisticas in analysis['describe'].items():
+        click.echo(f"\n📊 Estadísticas para la columna: {columna}")
+        for nombre_estadistica, valor in estadisticas.items():
+            valor = valor if valor is not None else "N/A"
+            click.echo(f"   - {nombre_estadistica.capitalize()}: {valor}")
+
+@cli.command()
+@click.option('--id', required=False, type=int, help="ID del dataset")
+@click.option('--name', required=False, help="Nombre del dataset (alternativa a ID)")
+@click.option('--type', required=True, type=click.Choice(['histogram', 'scatter', 'correlation']), help="Tipo de gráfico")
+@click.option('--column', required=False, help="Columna para histograma")
+@click.option('--x', required=False, help="Columna X (scatter)")
+@click.option('--y', required=False, help="Columna Y (scatter)")
+def visualize(id, name, type, column, x, y):
+    """Genera visualizaciones a partir del dataset"""
+    df = obtener_dataset_por_id(id, name)
+    if df is None:
         return
 
-    print("[📊] Analizando datos...\n")
-    analysis = analyze_csv(file_response.content)
+    if type == "histogram":
+        if not column:
+            click.echo("[⚠️] Debes especificar --column para histogramas")
+            return
+        plot_histogram(df, column)
 
-    print(f"🔢 Dimensiones: {analysis['shape']}")
-    print(f"📄 Columnas: {analysis['columns']}")
-    print(f"🔤 Tipos de datos: {analysis['dtypes']}")
-    print(f"⚠️ Valores nulos: {analysis['nulls']}")
-    print(f"📈 Estadísticas:\n")
+    elif type == "scatter":
+        if not x or not y:
+            click.echo("[⚠️] Debes especificar --x y --y para scatter")
+            return
+        plot_scatter(df, x, y)
 
-    for col, stats in analysis['describe'].items():
-        print(f"📌 {col}:")
-        for stat_name, value in stats.items():
-            print(f"   {stat_name}: {value}")
-        print("")
+    elif type == "correlation":
+        plot_correlation(df)
 
-def delete_dataset(dataset_id=None, name=None):
-    if dataset_id:
-        url = f"{API_URL}{dataset_id}/"
+@cli.command()
+@click.option('--id', type=int, help="ID del dataset")
+@click.option('--name', help="Nombre del dataset")
+def delete(id, name):
+    """Elimina un dataset por ID o nombre"""
+    if id:
+        url = f"{API_URL}{id}/"
     elif name:
-        # Buscar primero el dataset por nombre
         res = requests.get(f"{API_URL}by_name/?name={name}")
         if res.status_code != 200:
-            print(f"[❌] Dataset con nombre '{name}' no encontrado")
+            click.echo(f"[❌] Dataset con nombre '{name}' no encontrado")
             return
-        dataset_id = res.json()["id"]
-        url = f"{API_URL}{dataset_id}/"
+        id = res.json()["id"]
+        url = f"{API_URL}{id}/"
     else:
-        print("[⚠️] Debes proporcionar --id o --name para borrar un dataset")
+        click.echo("[⚠️] Debes proporcionar --id o --name para borrar un dataset")
         return
 
     res = requests.delete(url)
     if res.status_code in (204, 200):
-        print(f"[🗑️] Dataset eliminado correctamente (ID: {dataset_id})")
+        click.echo(f"[🗑️] Dataset eliminado correctamente (ID: {id})")
     else:
-        print(f"[❌] Error al eliminar dataset: {res.status_code}")
-        print(res.text)
+        click.echo(f"[❌] Error al eliminar dataset: {res.status_code}\n{res.text}")
 
+@cli.command()
+@click.option('--id', required=True, type=int, help="ID del dataset")
+@click.option('--feature', required=True, help="Columna independiente (feature)")
+@click.option('--target', required=True, help="Columna objetivo (target)")
+@click.option('--future', required=True, multiple=True, type=float, help="Valores futuros de la variable independiente")
+def predict(id, feature, target, future):
+    """
+    Predice valores futuros usando regresión lineal.
+    """
+    future_params = "&".join([f"future={val}" for val in future])
+    url = f"{API_URL}{id}/predict/?feature={feature}&target={target}&{future_params}"
 
-def main():
-    parser = argparse.ArgumentParser(description="Data Insights CLI")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    click.echo(f"[🔮] Solicitando predicción desde el backend...")
+    res = requests.get(url)
 
-    # upload
-    upload_parser = subparsers.add_parser("upload", help="Subir un dataset")
-    upload_parser.add_argument("--file", type=str, required=True, help="Ruta al archivo CSV")
-    upload_parser.add_argument("--name", type=str, help="Nombre del dataset (opcional)")
+    if res.status_code != 200:
+        click.echo(f"[❌] Error al obtener predicciones ({res.status_code})")
+        click.echo(res.text)
+        return
 
-    # analyze
-    analyze_parser = subparsers.add_parser("analyze", help="Analizar un dataset")
-    analyze_parser.add_argument("--id", type=int, required=True, help="ID del dataset")
-
-    # visualize
-    visualize_parser = subparsers.add_parser("visualize", help="Generar visualización")
-    visualize_parser.add_argument("--id", type=int, required=True, help="ID del dataset")
-    visualize_parser.add_argument("--type", type=str, required=True, choices=["histogram", "scatter", "correlation"], help="Tipo de gráfico")
-    visualize_parser.add_argument("--column", type=str, help="Columna para histograma")
-    visualize_parser.add_argument("--x", type=str, help="Columna X (scatter)")
-    visualize_parser.add_argument("--y", type=str, help="Columna Y (scatter)")
-    visualize_parser.add_argument("--name", type=str, help="Nombre del dataset (opcional en lugar de --id)")
-
-    # delete
-    delete_parser = subparsers.add_parser("delete", help="Eliminar un dataset")
-    delete_parser.add_argument("--id", type=int, help="ID del dataset")
-    delete_parser.add_argument("--name", type=str, help="Nombre del dataset")
-
-    args = parser.parse_args()
-
-    if args.command == "upload":
-        upload_file(args.file, args.name)
-    elif args.command == "analyze":
-        analyze_dataset(args.id)
-    elif args.command == "visualize":
-        # Dataset por ID o nombre
-        if args.id:
-            res = requests.get(f"{API_URL}{args.id}/")
-        elif args.name:
-            res = requests.get(f"{API_URL}by_name/?name={args.name}")
-        else:
-            print("[❌] Debes proporcionar --id o --name")
-            return
-        res = requests.get(f"{API_URL}{args.id}/")
-        if res.status_code != 200:
-            print(f"[❌] Dataset no encontrado ({res.status_code})")
-            return
-
-        file_url = res.json()["file"]
-        print(f"[📥] Descargando CSV desde: {file_url}")
-        file_res = requests.get(file_url)
-
-        if file_res.status_code != 200:
-            print(f"[❌] Error al descargar CSV")
-            return
-
-        df = pd.read_csv(BytesIO(file_res.content))
-
-        if args.type == "histogram":
-            if not args.column:
-                print("[⚠️] Debes especificar --column para histogramas")
-                return
-            plot_histogram(df, args.column)
-
-        elif args.type == "scatter":
-            if not args.x or not args.y:
-                print("[⚠️] Debes especificar --x y --y para scatter")
-                return
-            plot_scatter(df, args.x, args.y)
-
-        elif args.type == "correlation":
-            plot_correlation(df)
-    elif args.command == "delete":
-        delete_dataset(dataset_id=args.id, name=args.name)
-        
-if __name__ == "__main__":
-    main()
+    data = res.json()
+    click.echo(f"\n🔮 Predicciones para target '{target}' según '{feature}':")
+    for pred in data["predicciones"]:
+        click.echo(f"   ➤ Si {feature} = {pred['x']} ➜ {target} ≈ {round(pred['y'], 2)}")
+if __name__ == '__main__':
+    cli()

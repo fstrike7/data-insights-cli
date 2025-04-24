@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-data-insights = "data_insights_cli.cli.main:main"
+data-insights = "data_insights_cli.cli.main:cli"
 
 [tool.setuptools]
 packages = ["data_insights_cli"]

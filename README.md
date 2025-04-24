@@ -7,17 +7,18 @@
 ## 🚀 Características
 
 - Carga de datasets en formato CSV.
-- Análisis exploratorio de datos (EDA):
+- Análisis exploratorio de datos (EDA) desde el backend:
   - Estadísticas descriptivas
   - Detección de valores nulos
   - Matriz de correlación
-- Generación de visualizaciones:
+- Generación de visualizaciones desde el CLI:
   - Histogramas
   - Gráficos de dispersión
   - Mapa de calor de correlación
+- Predicciones simples mediante regresión lineal desde el backend (`data-insights predict`)
 - Exportación como imágenes (`.png`)
 - Interfaz por consola instalada como comando: `data-insights`
-- Backend en Django + Django REST Framework para gestión de archivos y lógica.
+- Backend en Django + Django REST Framework para gestión de archivos, análisis y predicción.
 
 ---
 
@@ -27,9 +28,10 @@
 - Django 4.x + Django REST Framework
 - Pandas
 - Matplotlib / Seaborn
+- scikit-learn
 - requests
 - SQLite
-- CLI con `setuptools` y `pyproject.toml`
+- CLI con `setuptools`, `click` y `pyproject.toml`
 
 ---
 
@@ -63,17 +65,19 @@ python manage.py runserver
 # Subir un dataset CSV
 data-insights upload --file path/al/archivo.csv --name "Ventas Abril"
 
-# Obtener análisis básico
+# Obtener análisis básico (desde el backend)
 data-insights analyze --id 1
 
 # Generar visualización y exportarla como imagen
 data-insights visualize --id 1 --type histogram --column edad
+
+# Predecir valores futuros con regresión lineal (desde el backend)
+data-insights predict --id 1 --feature año --target ventas --future 2026 --future 2027
 ```
-Los archivos se guardarán en la carpeta outputs/ automáticamente.
+Los archivos se guardarán en la carpeta `outputs/` automáticamente.
 
 
-
-## ✅ Ejempos de uso
+## ✅ Ejemplos de uso
 
 ```bash
 # Histograma de una columna
@@ -84,6 +88,9 @@ data-insights visualize --id 1 --type scatter --x edad --y ingresos
 
 # Mapa de correlación
 data-insights visualize --id 1 --type correlation
+
+# Predicción de valores para años futuros (desde backend)
+data-insights predict --id 1 --feature año --target ventas --future 2026 --future 2027
 ```
 
 ## 📁 Estructura del proyecto
@@ -93,47 +100,40 @@ data-insights-cli/
 ├── data_insights_cli/
 │   ├── analyzer/
 │   │   ├── reader.py
+│   │   ├── predictor.py
 │   │   ├── stats.py
 │   │   ├── visualizer.py
 │   ├── cli/
 │   │   └── main.py
 │   ├── __init__.py
 │
-├── data_insights/      # Backend Django
-│   ├── api/
-│   ├── data_insights/
-│   └── manage.py
+├── ├──data_insights/      # Backend Django
+│   │   ├── api/
+│   │   ├── data_insights/
+│   │   └── manage.py
 ├── pyproject.toml
 ├── requirements.txt
 ├── README.md
 ├── outputs/            # Carpeta generada automáticamente para guardar los gráficos
+├── tests/
 ```
 
 ## 📌 Roadmap
- Backend Django funcional con API REST
 
+- [x] Backend Django funcional con API REST
 - [x] CLI instalable como comando global (data-insights)
-
 - [x] Subida de datasets
-
-- [x] Análisis exploratorio (EDA)
-
+- [x] Análisis exploratorio (EDA) desde el backend
 - [x] Visualizaciones exportables (.png)
-
 - [x] Eliminación de datasets (delete)
-
 - [x] Buscar por nombre (--name)
-
+- [x] Migración de argparse a click
+- [x] Predicciones con regresión lineal desde backend (`data-insights predict`)
 - [ ] Exportar análisis como JSON
-
 - [ ] Validaciones más específicas
-
 - [ ] Tests automatizados
-
 - [ ] Documentación de API con Swagger
-
 - [ ] UI Web (opcional)
 
 ## 📝 Licencia
 MIT
-
